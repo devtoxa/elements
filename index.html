@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>원소 카드 배틀 (Elemental Card Battle)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Jua', 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+            user-select: none;
+        }
+
+        /* 3D Card Effects */
+        .card-container {
+            perspective: 1000px;
+        }
+
+        .card {
+            width: 100px;
+            height: 145px;
+            border-radius: 12px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            background: #ffffff;
+            border: 3px solid #1e293b;
+        }
+
+        @media (min-width: 640px) {
+            .card {
+                width: 120px;
+                height: 175px;
+                border-radius: 14px;
+                border-width: 4px;
+            }
+        }
+
+        .card:hover {
+            transform: translateY(-10px) scale(1.05);
+            box-shadow: 0 15px 25px rgba(255, 255, 255, 0.2);
+        }
+
+        .card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .card.selected {
+            transform: translateY(-20px) scale(1.08);
+            border-color: #f59e0b;
+            box-shadow: 0 0 20px #f59e0b;
+        }
+
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #ffffff;
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+            border: 2px solid #6366f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: rotateY(180deg);
+        }
+
+        .card.flipped {
+            transform: rotateY(180deg);
+        }
+
+        /* Arena Battle Card Effect */
+        .arena-card {
+            width: 130px;
+            height: 185px;
+            border-radius: 14px;
+            border: 4px solid #1e293b;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            animation: cardSpawn 0.4s ease-out forwards;
+        }
+
+        @media (min-width: 640px) {
+            .arena-card {
+                width: 150px;
+                height: 215px;
+            }
+        }
+
+        @keyframes cardSpawn {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* Element Colors & Icons Placement */
+        .icon-grid {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            gap: 6px;
+        }
+
+        .icon-row {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        /* Pulse Animations for Winner */
+        .winner-glow {
+            animation: winnerGlow 1s infinite alternate;
+        }
+
+        @keyframes winnerGlow {
+            from {
+                box-shadow: 0 0 15px #22c55e;
+            }
+
+            to {
+                box-shadow: 0 0 35px #4ade80;
+            }
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+        }
+
+        @keyframes shake {
+
+            10%,
+            90% {
+                transform: translate3d(-1px, 0, 0);
+            }
+
+            20%,
+            80% {
+                transform: translate3d(2px, 0, 0);
+            }
+
+            30%,
+            50%,
+            70% {
+                transform: translate3d(-4px, 0, 0);
+            }
+
+            40%,
+            60% {
+                transform: translate3d(4px, 0, 0);
+            }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col items-center justify-between min-h-screen p-2 sm:p-4 overflow-x-hidden">
+
+    <!-- Header / Scoreboard -->
+    <header
+        class="w-full max-w-4xl flex items-center justify-between bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-3 sm:p-4 mb-2 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-md">
+                <i class="fa-solid fa-layer-group text-xl sm:text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-bold tracking-wide text-amber-400">원소 카드 배틀</h1>
+                <p class="text-xs text-slate-400 hidden sm:block">상성: 🔥 > 💨 > 🟩 > 💧 > 🔥 | 숫자 클수록 강함</p>
+            </div>
+        </div>
+
+        <!-- Scores & Round -->
+        <div class="flex items-center space-x-4 sm:space-x-8">
+            <div class="text-center">
+                <span class="text-xs text-slate-400 block">PLAYER</span>
+                <span id="player-score" class="text-2xl sm:text-3xl font-black text-emerald-400">0</span>
+            </div>
+            <div class="text-center px-2 py-1 bg-slate-900/60 rounded-lg border border-slate-700">
+                <span class="text-xs text-amber-400 block font-bold">ROUND</span>
+                <span id="round-num" class="text-lg sm:text-xl font-bold text-white">1 / 5</span>
+            </div>
+            <div class="text-center">
+                <span class="text-xs text-slate-400 block">AI</span>
+                <span id="ai-score" class="text-2xl sm:text-3xl font-black text-rose-400">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="w-full max-w-4xl flex-1 flex flex-col justify-between items-center my-2 gap-4">
+
+        <!-- AI Hand Container -->
+        <div class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur">
+            <div class="flex justify-between items-center mb-2 px-2">
+                <span class="text-sm text-slate-400 font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-robot text-rose-400"></i> AI 손패 (<span id="ai-card-count">5</span>장)
+                </span>
+                <span id="ai-status" class="text-xs text-slate-500 italic">카드를 기다리는 중...</span>
+            </div>
+            <div id="ai-hand" class="flex justify-center items-center gap-2 sm:gap-3 flex-wrap min-h-[150px]">
+                <!-- AI cards render here (Back side) -->
+            </div>
+        </div>
+
+        <!-- Battle Arena -->
+        <div
+            class="w-full bg-gradient-to-r from-slate-900/90 via-indigo-950/40 to-slate-900/90 border-2 border-indigo-500/30 rounded-2xl p-4 flex flex-col items-center justify-center relative min-h-[260px] sm:min-h-[290px] shadow-2xl">
+
+            <!-- Relationship Rule Guide Pill -->
+            <div
+                class="absolute top-2 left-1/2 transform -translate-x-1/2 bg-slate-800/90 border border-slate-700 px-3 py-1 rounded-full text-xs flex gap-2 sm:gap-4 text-slate-300 shadow">
+                <span>🔥>💨</span>
+                <span>💨>🟩</span>
+                <span>🟩>💧</span>
+                <span>💧>🔥</span>
+            </div>
+
+            <!-- Battle Arena Cards Display -->
+            <div class="flex items-center justify-center gap-4 sm:gap-12 w-full mt-4">
+                <!-- AI Played Card -->
+                <div class="flex flex-col items-center gap-2">
+                    <span class="text-xs text-slate-400 font-bold">AI 카드</span>
+                    <div id="ai-slot"
+                        class="w-[110px] h-[155px] sm:w-[130px] sm:h-[185px] border-2 border-dashed border-slate-700 rounded-xl flex items-center justify-center bg-slate-950/40">
+                        <span class="text-slate-600 text-sm">대기 중</span>
+                    </div>
+                </div>
+
+                <!-- VS Badge & Result Message -->
+                <div class="flex flex-col items-center justify-center z-10 my-auto">
+                    <div id="vs-badge"
+                        class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg border-2 border-amber-300 mb-1">
+                        VS
+                    </div>
+                    <div id="battle-result"
+                        class="text-center font-extrabold text-sm sm:text-base h-12 flex flex-col items-center justify-center min-w-[120px]">
+                        <span class="text-slate-400 text-xs">카드를 선택하세요</span>
+                    </div>
+                </div>
+
+                <!-- Player Played Card -->
+                <div class="flex flex-col items-center gap-2">
+                    <span class="text-xs text-slate-400 font-bold">내 카드</span>
+                    <div id="player-slot"
+                        class="w-[110px] h-[155px] sm:w-[130px] sm:h-[185px] border-2 border-dashed border-slate-700 rounded-xl flex items-center justify-center bg-slate-950/40">
+                        <span class="text-slate-600 text-sm">선택 안 됨</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Play Button -->
+            <button id="play-btn" onclick="playRound()" disabled
+                class="mt-3 px-8 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-lg rounded-xl shadow-lg transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95">
+                카드 내기!
+            </button>
+        </div>
+
+        <!-- Player Hand Container -->
+        <div class="w-full bg-slate-900/50 border border-slate-800 rounded-2xl p-3 text-center backdrop-blur">
+            <div class="flex justify-between items-center mb-2 px-2">
+                <span class="text-sm text-slate-400 font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-user text-emerald-400"></i> 내 손패 (<span id="player-card-count">5</span>장)
+                </span>
+                <span class="text-xs text-amber-400/90">클릭하여 낼 카드를 선택하세요</span>
+            </div>
+            <div id="player-hand" class="flex justify-center items-center gap-2 sm:gap-3 flex-wrap min-h-[150px]">
+                <!-- Player cards render here -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Game Rule Floating Modal / Button -->
+    <footer class="w-full max-w-4xl flex justify-between items-center text-xs text-slate-500 mt-2 px-2">
+        <button onclick="toggleModal(true)" class="hover:text-amber-400 transition-colors flex items-center gap-1">
+            <i class="fa-solid fa-circle-info"></i> 상세 룰 보기
+        </button>
+        <button onclick="resetGame()" class="hover:text-rose-400 transition-colors flex items-center gap-1">
+            <i class="fa-solid fa-rotate-right"></i> 새 게임 시작
+        </button>
+    </footer>
+
+    <!-- Rule Modal -->
+    <div id="rule-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div
+            class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 text-slate-200 shadow-2xl relative">
+            <button onclick="toggleModal(false)" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="text-2xl font-bold text-amber-400 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-book"></i> 게임 규칙 안내
+            </h2>
+            <div class="space-y-3 text-sm text-slate-300 leading-relaxed">
+                <p class="font-semibold text-white">1. 속성 가위바위보 상성 (보너스 +2점)</p>
+                <div class="bg-slate-800 p-2.5 rounded-lg text-xs space-y-1 border border-slate-700">
+                    <p>🔥 <b>불</b>은 💨 <b>바람</b>을 이김</p>
+                    <p>💨 <b>바람</b>은 🟩 <b>땅</b>을 이김</p>
+                    <p>🟩 <b>땅</b>은 💧 <b>물</b>을 이김</p>
+                    <p>💧 <b>물</b>은 🔥 <b>불</b>을 이김</p>
+                </div>
+
+                <p class="font-semibold text-white">2. 숫자 파워 (1 ~ 3)</p>
+                <p class="text-xs text-slate-400">상성에서 이기지 못하거나 비길 경우, 카드의 **숫자(아이콘 개수)**가 높은 쪽이 승리합니다.</p>
+
+                <p class="font-semibold text-white">3. 조커 (특수 카드)</p>
+                <div class="bg-slate-800 p-2.5 rounded-lg text-xs space-y-1 border border-slate-700">
+                    <p><b class="text-amber-400">❓ 물음표 카드:</b> 내는 순간 랜덤 속성 + 랜덤 파워(1~3)로 짠! 변신합니다.</p>
+                    <p><b class="text-indigo-400">❗ 느낌표 카드:</b> 강력한 와일드 카드! 무조건 파워 4의 최고 힘을 발휘합니다.</p>
+                </div>
+
+                <p class="font-semibold text-white">4. 승리 조건</p>
+                <p class="text-xs text-slate-400">총 5라운드 동안 더 많은 라운드를 승리한 플레이어가 최종 승리합니다!</p>
+            </div>
+            <button onclick="toggleModal(false)"
+                class="w-full mt-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 font-bold rounded-xl text-white">
+                확인 및 게임 시작
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameover-modal"
+        class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div
+            class="bg-slate-900 border-2 border-amber-500/50 rounded-2xl max-w-sm w-full p-6 text-center text-slate-200 shadow-2xl">
+            <div id="gameover-icon" class="text-5xl mb-3">🏆</div>
+            <h2 id="gameover-title" class="text-3xl font-black text-amber-400 mb-2">최종 승리!</h2>
+            <p id="gameover-msg" class="text-slate-300 mb-6 text-sm">축하합니다! AI를 물리치셨습니다.</p>
+            <div class="bg-slate-800/80 p-3 rounded-xl mb-6 flex justify-around text-center border border-slate-700">
+                <div>
+                    <span class="text-xs text-slate-400 block">최종 스코어</span>
+                    <span id="final-score" class="text-xl font-bold text-amber-400">3 - 2</span>
+                </div>
+            </div>
+            <button onclick="resetGame(); toggleGameOverModal(false);"
+                class="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-lg rounded-xl shadow-lg hover:from-amber-400 hover:to-orange-400 transform hover:scale-105 active:scale-95 transition-all">
+                다시 한 판 더!
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Element Data Setup
+        const ELEMENTS = {
+            FIRE: {name: '불', icon: '🔥', color: 'border-orange-500 bg-orange-50 text-orange-600', beats: 'WIND'},
+            WATER: {name: '물', icon: '💧', color: 'border-sky-500 bg-sky-50 text-sky-600', beats: 'FIRE'},
+            WIND: {name: '바람', icon: '💨', color: 'border-teal-500 bg-teal-50 text-teal-600', beats: 'EARTH'},
+            EARTH: {name: '땅', icon: '🟩', color: 'border-emerald-600 bg-emerald-50 text-emerald-700', beats: 'WATER'}
+        };
+
+        // Game State Variables
+        let currentRound = 1;
+        const maxRounds = 5;
+        let playerScore = 0;
+        let aiScore = 0;
+        let playerHand = [];
+        let aiHand = [];
+        let selectedPlayerCardIndex = null;
+        let isProcessing = false;
+
+        // On Page Load Init
+        window.onload = function () {
+            resetGame();
+        };
+
+        // Generate Random Deck Card
+        function generateRandomCard() {
+            const rand = Math.random();
+
+            // Special JOKER Cards (15% chance)
+            if (rand < 0.08) {
+                return {type: 'JOKER_RANDOM', name: '?', icon: '❓', power: '?', isJoker: true};
+            } else if (rand < 0.15) {
+                return {type: 'JOKER_ULTRA', name: '!', icon: '❗', power: 4, isJoker: true};
+            }
+
+            // Normal Element Cards
+            const keys = Object.keys(ELEMENTS);
+            const randomElementKey = keys[Math.floor(Math.random() * keys.length)];
+            const randomPower = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+
+            return {
+                type: randomElementKey,
+                element: ELEMENTS[randomElementKey],
+                power: randomPower,
+                isJoker: false
+            };
+        }
+
+        // Initialize / Reset Game
+        function resetGame() {
+            currentRound = 1;
+            playerScore = 0;
+            aiScore = 0;
+            selectedPlayerCardIndex = null;
+            isProcessing = false;
+
+            // Generate 5 cards for each
+            playerHand = Array.from({length: maxRounds}, () => generateRandomCard());
+            aiHand = Array.from({length: maxRounds}, () => generateRandomCard());
+
+            updateUI();
+            resetArenaSlot();
+        }
+
+        // Reset Battle Arena
+        function resetArenaSlot() {
+            document.getElementById('player-slot').innerHTML = `<span class="text-slate-600 text-sm">선택 안 됨</span>`;
+            document.getElementById('ai-slot').innerHTML = `<span class="text-slate-600 text-sm">대기 중</span>`;
+            document.getElementById('battle-result').innerHTML = `<span class="text-slate-400 text-xs">카드를 선택하세요</span>`;
+            document.getElementById('play-btn').disabled = true;
+            document.getElementById('vs-badge').className = "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg border-2 border-amber-300 mb-1";
+            selectedPlayerCardIndex = null;
+        }
+
+        // Render Hands & Stats
+        function updateUI() {
+            document.getElementById('round-num').innerText = `${currentRound} / ${maxRounds}`;
+            document.getElementById('player-score').innerText = playerScore;
+            document.getElementById('ai-score').innerText = aiScore;
+            document.getElementById('player-card-count').innerText = playerHand.length;
+            document.getElementById('ai-card-count').innerText = aiHand.length;
+
+            renderPlayerHand();
+            renderAIHand();
+        }
+
+        // Render Player Hand
+        function renderPlayerHand() {
+            const container = document.getElementById('player-hand');
+            container.innerHTML = '';
+
+            playerHand.forEach((card, index) => {
+                const cardEl = createCardDOM(card, index, true);
+                if (selectedPlayerCardIndex === index) {
+                    cardEl.classList.add('selected');
+                }
+                cardEl.onclick = () => selectCard(index);
+                container.appendChild(cardEl);
+            });
+        }
+
+        // Render AI Back Card Hand
+        function renderAIHand() {
+            const container = document.getElementById('ai-hand');
+            container.innerHTML = '';
+
+            aiHand.forEach(() => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card cursor-default';
+                cardEl.innerHTML = `
+                    <div class="card-face card-back">
+                        <div class="w-10 h-10 rounded-full bg-indigo-900/80 border border-indigo-500 flex items-center justify-center text-indigo-300 font-bold text-lg">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(cardEl);
+            });
+        }
+
+        // Card HTML Generator
+        function createCardDOM(card, index, isPlayer = true) {
+            const cardEl = document.createElement('div');
+            cardEl.className = `card ${isProcessing ? 'disabled' : ''}`;
+
+            let contentHTML = '';
+
+            if (card.isJoker) {
+                // Special Joker Card Layout
+                const isUltra = card.type === 'JOKER_ULTRA';
+                const borderColor = isUltra ? 'border-purple-600' : 'border-amber-500';
+                const textColor = isUltra ? 'text-purple-600' : 'text-amber-500';
+
+                contentHTML = `
+                    <div class="card-face border-2 ${borderColor} flex flex-col justify-between items-center p-2 bg-slate-50">
+                        <div class="w-full flex justify-between text-xs font-bold ${textColor}">
+                            <span>${card.icon}</span>
+                            <span>JOKER</span>
+                        </div>
+                        <div class="text-4xl sm:text-5xl my-auto font-black ${textColor}">
+                            ${card.icon}
+                        </div>
+                        <div class="text-xs font-bold ${textColor}">
+                            ${isUltra ? '파워 4' : '랜덤 변신'}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Normal Element Cards Layout (1, 2, or 3 icons grid)
+                const element = card.element;
+                let iconsLayout = '';
+
+                if (card.power === 1) {
+                    iconsLayout = `<div class="icon-grid"><span class="text-2xl sm:text-3xl">${element.icon}</span></div>`;
+                } else if (card.power === 2) {
+                    iconsLayout = `
+                        <div class="icon-grid">
+                            <span class="text-2xl sm:text-3xl">${element.icon}</span>
+                            <span class="text-2xl sm:text-3xl">${element.icon}</span>
+                        </div>`;
+                } else if (card.power === 3) {
+                    iconsLayout = `
+                        <div class="icon-grid">
+                            <span class="text-xl sm:text-2xl">${element.icon}</span>
+                            <div class="icon-row">
+                                <span class="text-xl sm:text-2xl">${element.icon}</span>
+                                <span class="text-xl sm:text-2xl">${element.icon}</span>
+                            </div>
+                        </div>`;
+                }
+
+                contentHTML = `
+                    <div class="card-face border-2 ${element.color} flex flex-col justify-between p-2">
+                        <div class="w-full flex justify-between items-center text-xs font-black">
+                            <span>${element.icon} ${element.name}</span>
+                            <span class="bg-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-bold">${card.power}</span>
+                        </div>
+                        <div class="flex-1 flex items-center justify-center my-1">
+                            ${iconsLayout}
+                        </div>
+                        <div class="w-full text-right text-[10px] text-slate-400 font-bold">
+                            POWER ${card.power}
+                        </div>
+                    </div>
+                `;
+            }
+
+            cardEl.innerHTML = contentHTML;
+            return cardEl;
+        }
+
+        // Select Card from Player Hand
+        function selectCard(index) {
+            if (isProcessing) return;
+
+            selectedPlayerCardIndex = index;
+            renderPlayerHand(); // Highlight selected card
+
+            const card = playerHand[index];
+            const playerSlot = document.getElementById('player-slot');
+            playerSlot.innerHTML = '';
+
+            // Create preview card inside arena slot
+            const previewCard = createCardDOM(card, index, true);
+            previewCard.classList.remove('card');
+            previewCard.classList.add('arena-card');
+            playerSlot.appendChild(previewCard);
+
+            document.getElementById('play-btn').disabled = false;
+        }
+
+        // Play Round Logic
+        function playRound() {
+            if (selectedPlayerCardIndex === null || isProcessing) return;
+
+            isProcessing = true;
+            document.getElementById('play-btn').disabled = true;
+
+            // 1. Get Selected Player Card & Pick AI Card
+            let playerCard = playerHand[selectedPlayerCardIndex];
+            const aiCardIndex = Math.floor(Math.random() * aiHand.length);
+            let aiCard = aiHand[aiCardIndex];
+
+            // 2. Resolve Joker cards (Random transform)
+            playerCard = resolveJoker(playerCard);
+            aiCard = resolveJoker(aiCard);
+
+            // 3. Render AI Card to Arena
+            const aiSlot = document.getElementById('ai-slot');
+            aiSlot.innerHTML = '';
+            const aiArenaCard = createCardDOM(aiCard, aiCardIndex, false);
+            aiArenaCard.classList.remove('card');
+            aiArenaCard.classList.add('arena-card');
+            aiSlot.appendChild(aiArenaCard);
+
+            // 4. Calculate Winner
+            const result = calculateWinner(playerCard, aiCard);
+
+            // 5. Update Arena UI with Results
+            setTimeout(() => {
+                const resultTextEl = document.getElementById('battle-result');
+                const vsBadge = document.getElementById('vs-badge');
+
+                if (result.winner === 'PLAYER') {
+                    playerScore++;
+                    resultTextEl.innerHTML = `<span class="text-emerald-400 font-black text-lg sm:text-xl animate-bounce">플레이어 승리!</span><span class="text-xs text-slate-300 font-normal">${result.reason}</span>`;
+                    vsBadge.className = "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-emerald-500 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg border-2 border-emerald-300 mb-1 winner-glow";
+                } else if (result.winner === 'AI') {
+                    aiScore++;
+                    resultTextEl.innerHTML = `<span class="text-rose-400 font-black text-lg sm:text-xl animate-bounce">AI 승리!</span><span class="text-xs text-slate-300 font-normal">${result.reason}</span>`;
+                    vsBadge.className = "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-rose-500 text-white font-black text-xl flex items-center justify-center shadow-lg border-2 border-rose-300 mb-1 shake";
+                } else {
+                    resultTextEl.innerHTML = `<span class="text-amber-300 font-black text-lg sm:text-xl">무승부!</span><span class="text-xs text-slate-300 font-normal">${result.reason}</span>`;
+                    vsBadge.className = "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg border-2 border-amber-300 mb-1";
+                }
+
+                // Remove used cards from hands
+                playerHand.splice(selectedPlayerCardIndex, 1);
+                aiHand.splice(aiCardIndex, 1);
+
+                // Update Header Scores
+                document.getElementById('player-score').innerText = playerScore;
+                document.getElementById('ai-score').innerText = aiScore;
+
+                // Next round delay
+                setTimeout(() => {
+                    if (currentRound < maxRounds) {
+                        currentRound++;
+                        selectedPlayerCardIndex = null;
+                        isProcessing = false;
+                        updateUI();
+                        resetArenaSlot();
+                    } else {
+                        // Game Finished!
+                        finishGame();
+                    }
+                }, 2200);
+
+            }, 400);
+        }
+
+        // Resolve JOKER '?' transform into random element
+        function resolveJoker(card) {
+            if (card.type === 'JOKER_RANDOM') {
+                const keys = Object.keys(ELEMENTS);
+                const randomElementKey = keys[Math.floor(Math.random() * keys.length)];
+                const randomPower = Math.floor(Math.random() * 3) + 1;
+                return {
+                    type: randomElementKey,
+                    element: ELEMENTS[randomElementKey],
+                    power: randomPower,
+                    isJoker: false,
+                    wasJoker: true
+                };
+            }
+            return card;
+        }
+
+        // Main Rules Logic Engine
+        function calculateWinner(pCard, aCard) {
+            // Case 1: JOKER '!' Ultra Cards
+            if (pCard.type === 'JOKER_ULTRA' && aCard.type === 'JOKER_ULTRA') {
+                return {winner: 'DRAW', reason: '둘 다 와일드 ❗ 카드!'};
+            }
+            if (pCard.type === 'JOKER_ULTRA') {
+                return {winner: 'PLAYER', reason: '와일드 ❗ 카드의 압도적 파워!'};
+            }
+            if (aCard.type === 'JOKER_ULTRA') {
+                return {winner: 'AI', reason: 'AI의 와일드 ❗ 카드의 압도적 파워!'};
+            }
+
+            // Calculate Elemental Advantage (Gawi-Bawi-Bo)
+            const pElement = pCard.element;
+            const aElement = aCard.element;
+
+            let pPower = pCard.power;
+            let aPower = aCard.power;
+
+            // Element Advantage bonus (+2 Power)
+            if (pElement.beats === aCard.type) {
+                pPower += 2;
+                if (pPower > aPower) {
+                    return {winner: 'PLAYER', reason: `${pElement.name} > ${aElement.name} (상성 우위 +2)`};
+                }
+            } else if (aElement.beats === pCard.type) {
+                aPower += 2;
+                if (aPower > pPower) {
+                    return {winner: 'AI', reason: `${aElement.name} > ${pElement.name} (상성 우위 +2)`};
+                }
+            }
+
+            // If no elemental advantage or tied after advantage -> Compare Raw Power / Numbers
+            if (pPower > aPower) {
+                return {winner: 'PLAYER', reason: `숫자 파워 승리 (${pPower} vs ${aPower})`};
+            } else if (aPower > pPower) {
+                return {winner: 'AI', reason: `숫자 파워 승리 (${pPower} vs ${aPower})`};
+            } else {
+                return {winner: 'DRAW', reason: `동일한 파워 (${pPower} vs ${aPower})`};
+            }
+        }
+
+        // Show Game Over Modal
+        function finishGame() {
+            const modal = document.getElementById('gameover-modal');
+            const title = document.getElementById('gameover-title');
+            const msg = document.getElementById('gameover-msg');
+            const icon = document.getElementById('gameover-icon');
+            const finalScore = document.getElementById('final-score');
+
+            finalScore.innerText = `${playerScore} - ${aiScore}`;
+
+            if (playerScore > aiScore) {
+                icon.innerText = '🏆';
+                title.innerText = '최종 승리!';
+                title.className = 'text-3xl font-black text-amber-400 mb-2';
+                msg.innerText = '원소의 마스터! AI를 훌륭하게 제압하셨습니다.';
+            } else if (aiScore > playerScore) {
+                icon.innerText = '💀';
+                title.innerText = '아쉬운 패배...';
+                title.className = 'text-3xl font-black text-rose-500 mb-2';
+                msg.innerText = 'AI가 승리했습니다. 다시 도전해보세요!';
+            } else {
+                icon.innerText = '🤝';
+                title.innerText = '무승부!';
+                title.className = 'text-3xl font-black text-slate-300 mb-2';
+                msg.innerText = '치열한 접전 끝에 비겼습니다!';
+            }
+
+            toggleGameOverModal(true);
+        }
+
+        // Modals Toggle Helper
+        function toggleModal(show) {
+            const modal = document.getElementById('rule-modal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        function toggleGameOverModal(show) {
+            const modal = document.getElementById('gameover-modal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+    </script>
+</body>
+
+</html>
